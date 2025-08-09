@@ -243,8 +243,14 @@
                 {% if product.product_image_urls %}
                 <div class="carousel">
                     {% for image_url in product.product_image_urls.split(',') %}
-                    <img src="{{ url_for('serve_uploaded_file', filename=image_url.split('/')[-1]) }}"
-                        alt="Product Image">
+                    {% set image_url = image_url.strip() %}
+                    {% if image_url.startswith('/static/uploads/') or image_url.startswith('static/uploads/') %}
+                        <!-- Image URL is already a full path, use it directly -->
+                        <img src="{{ image_url }}" alt="Product Image" onerror="this.style.display='none'">
+                    {% else %}
+                        <!-- Image URL is just a filename, construct the full path -->
+                        <img src="{{ url_for('serve_uploaded_file', filename=image_url.split('/')[-1]) }}" alt="Product Image" onerror="this.style.display='none'">
+                    {% endif %}
                     {% endfor %}
                     {% if product.product_image_urls.split(',')|length > 1 %}
                     <span class="carousel-button prev">‹</span>
@@ -319,8 +325,12 @@
                     <div class="mt-2">
                         <p><strong>PDFs:</strong></p>
                         {% for pdf in product.download_pdfs.split(',') %}
-                        <a href="{{ url_for('serve_uploaded_file', filename=pdf.split('/')[-1]) }}" target="_blank"
-                            class="text-blue-600 hover:underline">Download PDF</a>
+                        {% set pdf = pdf.strip() %}
+                        {% if pdf.startswith('/static/uploads/') or pdf.startswith('static/uploads/') %}
+                            <a href="{{ pdf }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
+                        {% else %}
+                            <a href="{{ url_for('serve_uploaded_file', filename=pdf.split('/')[-1]) }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
+                        {% endif %}
                         {% endfor %}
                     </div>
                     {% endif %}
