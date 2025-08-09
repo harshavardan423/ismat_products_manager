@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Product</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        #image-dropzone {
+            border: 2px dashed #ccc;
+            padding: 16px;
+            text-align: center;
+        }
+
+        #image-dropzone.dragover {
+            background: #e2e8f0;
+        }
+
+        .image-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .image-preview img {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            cursor: move;
+            border: 2px solid transparent;
+        }
+
+        .image-preview img.dragging {
+            opacity: 0.5;
+            border: 2px dashed #3b82f6;
+        }
+
+        .variant-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        /* Mobile-specific styles */
+        @media (max-width: 640px) {
+            .image-preview img {
+                width: 60px;
+                height: 60px;
+            }
+
+            .variant-row input {
+                width: 100%;
+            }
+
+            .variant-row button {
+                width: 100%;
+            }
+        }
+    </style>
+    <script>
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.target.classList.add('dragover');
+            console.log('Drag over dropzone');
+        }
+
+        function handleDragLeave(e) {
+            e.target.classList.remove('dragover');
+            console.log('Drag left dropzone');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.target.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            console.log('Dropped files:', files);
+            handleFiles(files);
+        }
+
+        function handleFiles(files) {
+            const imageInput = document.querySelector('input[name="images"]');
+            const dataTransfer = new DataTransfer();
+            if (imageInput.files) {
+                for (let file of imageInput.files) {
+                    dataTransfer.items.add(file);
+                }
+            }
+            for (let file of files) {
+                if (file.type.startsWith('image/')) {
+                    dataTransfer.items.add(file);
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(file);
+                    img.dataset.filename = file.name;
+                    img.draggable = true;
+                    img.ondragstart = dragStart;
+                    img.ondragend = dragEnd;
+                    document.getElementById('image-preview').appendChild(img);
+                    console.log('Added new image:', file.name);
+                }
+            }
+            imageInput.files = dataTransfer.files;
+            updateImageOrder();
+        }
+
+        function dragStart(e) {
+            e.target.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', e.target.src);
+            e.dataTransfer.setData('filename', e.target.dataset.filename);
+            console.log('Dragging image:', e.target.dataset.filename);
+        }
+
+        function dragEnd(e) {
+            e.target.classList.remove('dragging');
+            console.log('Drag ended for image:', e.target.dataset.filename);
+        }
+
+        function handleImageDragOver(e) {
+            e.preventDefault();
+        }
+
+        function handleImageDrop(e) {
+            e.preventDefault();
+            const draggedSrc = e.dataTransfer.getData('text/plain');
+            const draggedFilename = e.dataTransfer.getData('filename');
+            const target = e.target.closest('img');
+            if (target && draggedSrc !== target.src) {
+                const images = Array.from(document.querySelectorAll('#image-preview img'));
+                const draggedIndex = images.findIndex(img => img.src === draggedSrc);
+                const targetIndex = images.findIndex(img => img.src === target.src);
+                const container = document.getElementById('image-preview');
+                if (draggedIndex < targetIndex) {
+                    container.insertBefore(images[draggedIndex], images[targetIndex].nextSibling);
+                } else {
+                    container.insertBefore(images[draggedIndex], images[targetIndex]);
+                }
+                console.log('Reordered image:', draggedFilename);
+                updateImageOrder();
+            }
+        }
+
+        function updateImageOrder() {
+            const images = document.querySelectorAll('#image-preview img');
+            const filenames = Array.from(images).map(img => img.dataset.filename);
+            document.getElementById('image-order').value = filenames.join(',');
+            console.log('Updated image order:', filenames);
+        }
+
+        function addVariant(name = '', price = '', sku = '') {
+            const container = document.getElementById('variant-container');
+            const div = document.createElement('div');
+            div.className = 'variant-row';
+            div.innerHTML = `
+                <input type="text" name="variant_name[]" class="w-full sm:w-1/3 border rounded p-2" placeholder="Variant Name" value="${name}">
+                <input type="number" name="variant_price[]" class="w-full sm:w-1/3 border rounded p-2" placeholder="Variant Price" step="0.01" value="${price}">
+                <input type="text" name="variant_sku[]" class="w-full sm:w-1/3 border rounded p-2" placeholder="Variant SKU" value="${sku}">
+                <button type="button" onclick="this.parentElement.remove(); console.log('Removed variant')" class="bg-red-600 text-white px-2 py-1 rounded">Remove</button>
+            `;
+            container.appendChild(div);
+            console.log('Added variant:', name, price, sku);
+        }
+
+        window.onload = function () {
+            const dropzone = document.getElementById('image-dropzone');
+            dropzone.addEventListener('dragover', handleDragOver);
+            dropzone.addEventListener('dragleave', handleDragLeave);
+            dropzone.addEventListener('drop', handleDrop);
+            dropzone.addEventListener('click', () => document.querySelector('input[name="images"]').click());
+            document.querySelector('input[name="images"]').addEventListener('change', function (e) {
+                console.log('Selected files via input:', e.target.files);
+                handleFiles(e.target.files);
+            });
+            document.getElementById('image-preview').addEventListener('dragover', handleImageDragOver);
+            document.getElementById('6image-preview').addEventListener('drop', handleImageDrop);
+            document.querySelectorAll('#image-preview img').forEach(img => {
+                img.dataset.filename = img.src.split('/').pop();
+                img.draggable = true;
+                img.ondragstart = dragStart;
+                img.ondragend = dragEnd;
+            });
+            updateImageOrder();
+        };
+    </script>
+</head>
+
+<body class="bg-gray-100">
+    <nav class="bg-white text-blue-600 p-4 shadow">
+        <div class="container mx-auto flex flex-col sm:flex-row justify-between items-center">
+            <!-- Logo + Navigation -->
+            <div class="flex items-center justify-between w-full sm:w-auto">
+                <!-- Logo -->
+                <a href="/">
+                    <img src="/static/images/d1ac29d9-3a91-478e-8cbf-130a3ee321c7.jpeg" alt="Logo" class="h-8 w-auto">
+                </a>
+                <!-- Mobile menu toggle -->
+                <button id="menu-toggle" class="sm:hidden focus:outline-none">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+            </div>
+            <!-- Navigation links -->
+            <div id="nav-links"
+                class="hidden sm:flex sm:items-center sm:space-x-6 flex-col sm:flex-row w-full sm:w-auto mt-4 sm:mt-0">
+                <div class="flex flex-col sm:flex-row sm:space-x-4">
+                    <a href="/" class="hover:underline py-2 sm:py-0">Home</a>
+                    <a href="/store" class="hover:underline py-2 sm:py-0">Store</a>
+                </div>
+                <!-- Auth Links -->
+                <div class="flex flex-col sm:flex-row sm:space-x-4 mt-4 sm:mt-0">
+                    {% if session.user_id %}
+                    <a href="/logout" class="hover:underline py-2 sm:py-0">Logout</a>
+                    {% else %}
+                    <a href="/login" class="hover:underline py-2 sm:py-0">Login</a>
+                    <a href="/register" class="hover:underline py-2 sm:py-0">Register</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4 sm:p-6">
+        <h1 class="text-xl sm:text-2xl font-bold mb-4">Edit Product</h1>
+        <form method="POST" enctype="multipart/form-data" class="bg-white p-4 sm:p-6 rounded shadow">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="category" class="block text-sm font-medium">Category</label>
+                    <input type="text" id="category" name="category" value="{{ product.category or '' }}"
+                        class="w-full border rounded p-2" required>
+                </div>
+                <div>
+                    <label for="product_name" class="block text-sm font-medium">Product Name</label>
+                    <input type="text" id="product_name" name="product_name" value="{{ product.product_name or '' }}"
+                        class="w-full border rounded p-2" required>
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="short_description" class="block text-sm font-medium">Short Description</label>
+                    <textarea id="short_description" name="short_description"
+                        class="w-full border rounded p-2">{{ product.short_description or '' }}</textarea>
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="long_description" class="block text-sm font-medium">Long Description</label>
+                    <textarea id="long_description" name="long_description"
+                        class="w-full border rounded p-2">{{ product.long_description or '' }}</textarea>
+                </div>
+                <div>
+                    <label for="mrp" class="block text-sm font-medium">MRP</label>
+                    <input type="number" id="mrp" name="mrp" step="0.01" value="{{ product.mrp or '' }}"
+                        class="w-full border rounded p-2" required>
+                </div>
+                <div>
+                    <label for="offer_price" class="block text-sm font-medium">Offer Price</label>
+                    <input type="number" id="offer_price" name="offer_price" step="0.01"
+                        value="{{ product.offer_price or '' }}" class="w-full border rounded p-2" required>
+                </div>
+                <div>
+                    <label for="sku" class="block text-sm font-medium">SKU#</label>
+                    <input type="text" id="sku" name="sku" value="{{ product.sku or '' }}"
+                        class="w-full border rounded p-2" required>
+                </div>
+                <div>
+                    <label for="stock_number" class="block text-sm font-medium">Stock Number</label>
+                    <input type="number" id="stock_number" name="stock_number" value="{{ product.stock_number or '' }}"
+                        class="w-full border rounded p-2" required>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block text-sm font-medium"><input type="checkbox" name="in_stock" {% if
+                            product.in_stock %}checked{% endif %}> In Stock</label>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block text-sm font-medium">Product Images (Existing: {{
+                        product.product_image_urls.split(',')|length if product.product_image_urls else 0 }})</label>
+                    <div class="image-preview" id="image-preview">
+                        {% for image_url in product.product_image_urls.split(',') if product.product_image_urls %}
+                        <img src="{{ url_for('serve_uploaded_file', filename=image_url.split('/')[-1]) }}"
+                            data-filename="{{ image_url.split('/')[-1] }}">
+                        {% endfor %}
+                    </div>
+                    <div id="image-dropzone" class="mt-2">Drag and drop images here or click to select</div>
+                    <input type="file" name="images" multiple accept="image/*" class="hidden">
+                    <input type="hidden" id="image-order" name="image_order">
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block text-sm font-medium">PDF Files (Existing: {{
+                        product.download_pdfs.split(',')|length if product.download_pdfs else 0 }})</label>
+                    {% if product.download_pdfs %}
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        {% for pdf in product.download_pdfs.split(',') %}
+                        <a href="{{ url_for('serve_uploaded_file', filename=pdf.split('/')[-1]) }}" target="_blank"
+                            class="text-blue-600 hover:underline">Download PDF</a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <input type="file" name="pdfs" multiple accept=".pdf" class="w-full border rounded p-2 mt-2">
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="youtube_links" class="block text-sm font-medium">YouTube Links (comma-separated)</label>
+                    <input type="text" id="youtube_links" name="youtube_links" value="{{ product.youtube_links or '' }}"
+                        class="w-full border rounded p-2">
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="technical_information" class="block text-sm font-medium">Technical Information (table
+                        format, e.g., | Key | Value |)</label>
+                    <textarea id="technical_information" name="technical_information"
+                        class="w-full border rounded p-2">{{ product.technical_information or '' }}</textarea>
+                </div>
+                <div>
+                    <label for="manufacturer" class="block text-sm font-medium">Manufacturer</label>
+                    <input type="text" id="manufacturer" name="manufacturer" value="{{ product.manufacturer or '' }}"
+                        class="w-full border rounded p-2">
+                </div>
+                <div>
+                    <label for="whatsapp_number" class="block text-sm font-medium">WhatsApp Number</label>
+                    <input type="text" id="whatsapp_number" name="whatsapp_number"
+                        value="{{ product.whatsapp_number or '' }}" class="w-full border rounded p-2">
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="special_note" class="block text-sm font-medium">Special Note</label>
+                    <textarea id="special_note" name="special_note"
+                        class="w-full border rounded p-2">{{ product.special_note or '' }}</textarea>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block text-sm font-medium"><input type="checkbox" name="is_rubber" {% if
+                            product.is_rubber %}checked{% endif %}> Is Rubber Product</label>
+                </div>
+                <div class="sm:col-span-2">
+                    <p class="font-medium text-sm sm:text-base">Rubber Product Details</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                        <div>
+                            <label for="rubber_density" class="block text-sm font-medium">Rubber Density</label>
+                            <input type="number" id="rubber_density" name="rubber_density" step="0.01"
+                                value="{{ product.rubber_density or '' }}" class="w-full border rounded p-2">
+                        </div>
+                        <div>
+                            <label for="rubber_height" class="block text-sm font-medium">Rubber Height</label>
+                            <input type="number" id="rubber_height" name="rubber_height" step="0.01"
+                                value="{{ product.rubber_height or '' }}" class="w-full border rounded p-2">
+                        </div>
+                        <div>
+                            <label for="rubber_length" class="block text-sm font-medium">Rubber Length</label>
+                            <input type="number" id="rubber_length" name="rubber_length" step="0.01"
+                                value="{{ product.rubber_length or '' }}" class="w-full border rounded p-2">
+                        </div>
+                        <div>
+                            <label for="rubber_thickness" class="block text-sm font-medium">Rubber Thickness</label>
+                            <input type="number" id="rubber_thickness" name="rubber_thickness" step="0.01"
+                                value="{{ product.rubber_thickness or '' }}" class="w-full border rounded p-2">
+                        </div>
+                    </div>
+                    <label for="rubber_description" class="block text-sm font-medium mt-2">Rubber Description</label>
+                    <textarea id="rubber_description" name="rubber_description"
+                        class="w-full border rounded p-2">{{ product.rubber_description or '' }}</textarea>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block text-sm font-medium">Variants</label>
+                    <div id="variant-container"></div>
+                    <button type="button" onclick="addVariant()"
+                        class="bg-blue-600 text-white px-4 py-2 rounded mt-2 w-full sm:w-auto">Add Variant</button>
+                </div>
+            </div>
+            <div class="mt-6 flex flex-col sm:flex-row sm:space-x-4 space-y-2 sm:space-y-0">
+                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded w-full sm:w-auto">Update
+                    Product</button>
+                <a href="{{ url_for('index') }}"
+                    class="bg-gray-600 text-white px-4 py-2 rounded w-full sm:w-auto text-center">Cancel</a>
+                <form action="{{ url_for('delete_product_ui', product_id=product.id) }}" method="POST"
+                    onsubmit="return confirm('Are you sure you want to delete this product?');"
+                    class="w-full sm:w-auto">
+                    <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded w-full sm:w-auto">Delete
+                        Product</button>
+                </form>
+            </div>
+        </form>
+    </div>
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            const variants = {{ product.to_dict().variants | tojson
+        }};
+        variants.forEach(variant => {
+            addVariant(variant.name, variant.price, variant.sku || '');
+        });
+        console.log('Initialized variants:', variants);
+        });
+
+        // Mobile menu toggle
+        document.getElementById('menu-toggle').addEventListener('click', () => {
+            const navLinks = document.getElementById('nav-links');
+            navLinks.classList.toggle('hidden');
+        });
+    </script>
+</body>
+
+</html>

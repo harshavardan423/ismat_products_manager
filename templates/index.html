@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .carousel {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            overflow: hidden;
+        }
+
+        .carousel img {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+            display: none;
+        }
+
+        .carousel img.active {
+            display: block;
+        }
+
+        .carousel-button {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 8px;
+            cursor: pointer;
+            font-size: 1.5rem;
+        }
+
+        .carousel-button.prev {
+            left: 5px;
+        }
+
+        .carousel-button.next {
+            right: 5px;
+        }
+
+        .no-images {
+            width: 100%;
+            height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f7f7f7;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+        }
+
+        /* Mobile-specific styles */
+        @media (max-width: 640px) {
+            .carousel {
+                height: 200px;
+            }
+
+            .carousel img {
+                height: 200px;
+            }
+
+            .no-images {
+                height: 200px;
+            }
+
+            .carousel-button {
+                padding: 6px;
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+    <script>
+        function initCarousels() {
+            document.querySelectorAll('.carousel').forEach(carousel => {
+                const images = carousel.querySelectorAll('img');
+                let currentIndex = 0;
+                if (images.length > 0) {
+                    images[0].classList.add('active');
+                    carousel.querySelector('.prev')?.addEventListener('click', () => {
+                        images[currentIndex].classList.remove('active');
+                        currentIndex = (currentIndex - 1 + images.length) % images.length;
+                        images[currentIndex].classList.add('active');
+                    });
+                    carousel.querySelector('.next')?.addEventListener('click', () => {
+                        images[currentIndex].classList.remove('active');
+                        currentIndex = (currentIndex + 1) % images.length;
+                        images[currentIndex].classList.add('active');
+                    });
+                }
+            });
+        }
+
+        function applyFilters() {
+            const form = document.getElementById('filter-form');
+            const url = new URL(window.location);
+            url.searchParams.set('q', form.querySelector('#search').value);
+            url.searchParams.set('category', form.querySelector('#category').value);
+            url.searchParams.set('in_stock', form.querySelector('#in_stock').value);
+            url.searchParams.set('min_price', form.querySelector('#min_price').value);
+            url.searchParams.set('max_price', form.querySelector('#max_price').value);
+            window.location = url;
+        }
+
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('select-all');
+            const checkboxes = document.querySelectorAll('.product-checkbox');
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        }
+
+        function deleteSelected() {
+            const selected = Array.from(document.querySelectorAll('.product-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) {
+                alert('Please select at least one product to delete.');
+                return;
+            }
+            if (confirm('Are you sure you want to delete the selected products?')) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/delete-selected';
+                selected.forEach(id => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'product_ids[]';
+                    input.value = id;
+                    form.appendChild(input);
+                });
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+
+        window.onload = initCarousels;
+    </script>
+</head>
+
+<body class="bg-gray-100">
+    <nav class="bg-white text-blue-600 p-4 shadow">
+        <div class="container mx-auto flex flex-col sm:flex-row justify-between items-center">
+            <!-- Logo + Navigation -->
+            <div class="flex items-center justify-between w-full sm:w-auto">
+                <!-- Logo -->
+                <a href="/">
+                    <img src="/static/images/d1ac29d9-3a91-478e-8cbf-130a3ee321c7.jpeg" alt="Logo" class="h-8 w-auto">
+                </a>
+                <!-- Mobile menu toggle -->
+                <button id="menu-toggle" class="sm:hidden focus:outline-none">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+            </div>
+            <!-- Navigation links -->
+            <div id="nav-links"
+                class="hidden sm:flex sm:items-center sm:space-x-6 flex-col sm:flex-row w-full sm:w-auto mt-4 sm:mt-0">
+                <div class="flex flex-col sm:flex-row sm:space-x-4">
+                    <a href="/" class="hover:underline py-2 sm:py-0">Home</a>
+                    <a href="/store" class="hover:underline py-2 sm:py-0">Store</a>
+                </div>
+                <!-- Auth Links -->
+                <div class="flex flex-col sm:flex-row sm:space-x-4 mt-4 sm:mt-0">
+                    {% if session.user_id %}
+                    <a href="/logout" class="hover:underline py-2 sm:py-0">Logout</a>
+                    {% else %}
+                    <a href="/login" class="hover:underline py-2 sm:py-0">Login</a>
+                    <a href="/register" class="hover:underline py-2 sm:py-0">Register</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4 sm:p-6">
+        <h1 class="text-2xl font-bold mb-4">Product Management</h1>
+
+        <!-- Filters and Search Bar -->
+        <div class="mb-6 bg-white p-4 rounded shadow">
+            <form id="filter-form" onsubmit="event.preventDefault(); applyFilters();">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                        <label for="search" class="block text-sm font-medium">Search</label>
+                        <input type="text" id="search" class="w-full border rounded p-2"
+                            placeholder="Search products..." value="{{ request.args.get('q', '') }}">
+                    </div>
+                    <div>
+                        <label for="category" class="block text-sm font-medium">Category</label>
+                        <select id="category" class="w-full border rounded p-2">
+                            <option value="">All Categories</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat }}" {% if cat==request.args.get('category') %}selected{% endif %}>{{
+                                cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="in_stock" class="block text-sm font-medium">Stock Status</label>
+                        <select id="in_stock" class="w-full border rounded p-2">
+                            <option value="">All</option>
+                            <option value="true" {% if request.args.get('in_stock')=='true' %}selected{% endif %}>In
+                                Stock</option>
+                            <option value="false" {% if request.args.get('in_stock')=='false' %}selected{% endif %}>Out
+                                of Stock</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium">Price Range</label>
+                        <div class="flex flex-col sm:flex-row sm:space-x-2">
+                            <input type="number" id="min_price" class="w-full sm:w-1/2 border rounded p-2 mb-2 sm:mb-0"
+                                placeholder="Min" step="0.01" value="{{ request.args.get('min_price', '') }}">
+                            <input type="number" id="max_price" class="w-full sm:w-1/2 border rounded p-2"
+                                placeholder="Max" step="0.01" value="{{ request.args.get('max_price', '') }}">
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="mt-4 w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded">Apply
+                    Filters</button>
+            </form>
+        </div>
+
+        <div class="flex flex-col sm:flex-row justify-between items-center mb-4">
+            <a href="/add"
+                class="bg-green-600 text-white px-4 py-2 rounded mb-4 sm:mb-0 w-full sm:w-auto text-center">Add
+                New Product</a>
+            <div class="flex items-center space-x-4">
+                <label class="flex items-center"><input type="checkbox" id="select-all" onclick="toggleSelectAll()"
+                        class="mr-2"> Select All</label>
+                <button onclick="deleteSelected()"
+                    class="bg-red-600 text-white px-4 py-2 rounded w-full sm:w-auto">Delete
+                    Selected</button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {% for product in products %}
+            <div class="bg-white rounded shadow p-4">
+                <input type="checkbox" class="product-checkbox" value="{{ product.id }}">
+                {% if product.product_image_urls %}
+                <div class="carousel">
+                    {% for image_url in product.product_image_urls.split(',') %}
+                    <img src="{{ url_for('serve_uploaded_file', filename=image_url.split('/')[-1]) }}"
+                        alt="Product Image">
+                    {% endfor %}
+                    {% if product.product_image_urls.split(',')|length > 1 %}
+                    <span class="carousel-button prev">‹</span>
+                    <span class="carousel-button next">›</span>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="no-images">
+                    <span class="text-gray-500">No images available</span>
+                </div>
+                {% endif %}
+                <h2 class="text-lg sm:text-xl font-bold mt-4">{{ product.product_name }}</h2>
+                <p class="text-gray-600 text-sm sm:text-base">{{ product.short_description }}</p>
+                <div class="mt-2 text-sm sm:text-base">
+                    <p><strong>Category:</strong> {{ product.category }}</p>
+                    <p><strong>MRP:</strong> ${{ product.mrp }} <strong>Offer:</strong> ${{ product.offer_price }}</p>
+                    <p><strong>SKU#:</strong> {{ product.sku }}</p>
+                    <p><strong>Stock:</strong> {{ "Yes" if product.in_stock else "No" }} ({{ product.stock_number }}
+                        units)</p>
+                    {% if product.variants %}
+                    <p><strong>Variants:</strong></p>
+                    <ul class="list-disc pl-5">
+                        {% for variant in product.to_dict().variants %}
+                        <li>{{ variant.name }}: ${{ variant.price }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                    {% if product.is_rubber %}
+                    <div class="mt-2">
+                        <p><strong>Rubber Specifications:</strong></p>
+                        <ul class="list-disc pl-5">
+                            {% if product.rubber_density %}
+                            <li>Density: {{ product.rubber_density }}</li>
+                            {% endif %}
+                            {% if product.rubber_height %}
+                            <li>Height: {{ product.rubber_height }}</li>
+                            {% endif %}
+                            {% if product.rubber_length %}
+                            <li>Length: {{ product.rubber_length }}</li>
+                            {% endif %}
+                            {% if product.rubber_thickness %}
+                            <li>Thickness: {{ product.rubber_thickness }}</li>
+                            {% endif %}
+                        </ul>
+                        <p>{{ product.rubber_description }}</p>
+                    </div>
+                    {% endif %}
+                    {% if product.youtube_links %}
+                    <div class="mt-2">
+                        <p><strong>YouTube:</strong></p>
+                        {% for link in product.youtube_links.split(',') %}
+                        <a href="{{ link }}" target="_blank" class="text-blue-600 hover:underline">Watch Video</a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if product.technical_information %}
+                    <div class="mt-2">
+                        <p><strong>Technical Info:</strong></p>
+                        <div>{{ product.technical_information|safe }}</div>
+                    </div>
+                    {% endif %}
+                    <div class="mt-2">
+                        <p><strong>Manufacturer:</strong> {{ product.manufacturer }}</p>
+                        {% if product.special_note %}
+                        <p><strong>Note:</strong> {{ product.special_note }}</p>
+                        {% endif %}
+                        {% if product.whatsapp_number %}
+                        <p><strong>WhatsApp:</strong> {{ product.whatsapp_number }}</p>
+                        {% endif %}
+                    </div>
+                    {% if product.download_pdfs %}
+                    <div class="mt-2">
+                        <p><strong>PDFs:</strong></p>
+                        {% for pdf in product.download_pdfs.split(',') %}
+                        <a href="{{ url_for('serve_uploaded_file', filename=pdf.split('/')[-1]) }}" target="_blank"
+                            class="text-blue-600 hover:underline">Download PDF</a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="mt-4 flex flex-col sm:flex-row sm:space-x-2 space-y-2 sm:space-y-0">
+                        <a href="{{ url_for('edit_product_ui', product_id=product.id) }}"
+                            class="bg-blue-600 text-white px-4 py-2 rounded text-center">Edit</a>
+                        <form action="{{ url_for('delete_product_ui', product_id=product.id) }}" method="POST"
+                            onsubmit="return confirm('Are you sure you want to delete this product?');">
+                            <button type="submit"
+                                class="bg-red-600 text-white px-4 py-2 rounded w-full sm:w-auto">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="mt-6 flex flex-wrap justify-center space-x-2">
+            {% if pagination.has_prev %}
+            <a href="{{ url_for('index', page=pagination.prev_num, q=request.args.get('q', ''), category=request.args.get('category', ''), in_stock=request.args.get('in_stock', ''), min_price=request.args.get('min_price', ''), max_price=request.args.get('max_price', '')) }}"
+                class="bg-blue-600 text-white px-4 py-2 rounded mb-2">‹ Prev</a>
+            {% endif %}
+            {% for page in pagination.iter_pages() %}
+            {% if page %}
+            <a href="{{ url_for('index', page=page, q=request.args.get('q', ''), category=request.args.get('category', ''), in_stock=request.args.get('in_stock', ''), min_price=request.args.get('min_price', ''), max_price=request.args.get('max_price', '')) }}"
+                class="px-4 py-2 rounded mb-2 {{ 'bg-blue-600 text-white' if page == pagination.page else 'bg-gray-200' }}">{{
+                page }}</a>
+            {% else %}
+            <span class="px-4 py-2 mb-2">...</span>
+            {% endif %}
+            {% endfor %}
+            {% if pagination.has_next %}
+            <a href="{{ url_for('index', page=pagination.next_num, q=request.args.get('q', ''), category=request.args.get('category', ''), in_stock=request.args.get('in_stock', ''), min_price=request.args.get('min_price', ''), max_price=request.args.get('max_price', '')) }}"
+                class="bg-blue-600 text-white px-4 py-2 rounded mb-2">Next ›</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        // Mobile menu toggle
+        document.getElementById('menu-toggle').addEventListener('click', () => {
+            const navLinks = document.getElementById('nav-links');
+            navLinks.classList.toggle('hidden');
+        });
+    </script>
+</body>
+
+</html>

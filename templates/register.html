@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gray-100 min-h-screen flex flex-col">
+    <nav class="bg-white text-blue-600 p-4 shadow">
+        <div class="container mx-auto flex flex-col sm:flex-row justify-between items-center">
+            <!-- Left: Logo and Navigation -->
+            <div class="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6 w-full sm:w-auto">
+                <!-- Logo -->
+                <a href="/">
+                    <img src="/static/images/d1ac29d9-3a91-478e-8cbf-130a3ee321c7.jpeg" alt="Logo" class="h-8 w-auto">
+                </a>
+                <!-- Nav Links -->
+                <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+                    <a href="/" class="hover:underline text-center">Home</a>
+                    <a href="/store" class="hover:underline text-center">Store</a>
+                </div>
+            </div>
+            <!-- Right: Auth Links -->
+            <div class="flex space-x-4 mt-4 sm:mt-0">
+                <a href="/login" class="hover:underline">Login</a>
+                <a href="/register" class="hover:underline">Register</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4 sm:p-6 flex-grow flex items-center justify-center">
+        <div class="w-full max-w-md">
+            <h1 class="text-2xl font-bold mb-4 text-center sm:text-left">Register</h1>
+            <form method="POST" class="bg-white p-6 rounded shadow">
+                {% if error %}
+                <p class="text-red-600 mb-4 text-center">{{ error }}</p>
+                {% endif %}
+                <div class="mb-4">
+                    <label for="username" class="block text-sm font-medium">Username</label>
+                    <input type="text" id="username" name="username"
+                        class="w-full border rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-600" required>
+                </div>
+                <div class="mb-4">
+                    <label for="password" class="block text-sm font-medium">Password</label>
+                    <input type="password" id="password" name="password"
+                        class="w-full border rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-600" required>
+                </div>
+                <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                    <button type="submit"
+                        class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full sm:w-auto">Register</button>
+                    <a href="/login"
+                        class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 text-center w-full sm:w-auto">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+
+</html>
