@@ -249,7 +249,7 @@
                         <img src="{{ image_url }}" alt="Product Image" onerror="this.style.display='none'">
                     {% else %}
                         <!-- Image URL is just a filename, construct the full path -->
-                        <img src="{{ url_for('serve_uploaded_file', filename=image_url.split('/')[-1]) }}" alt="Product Image" onerror="this.style.display='none'">
+                        <img src="{{ image_url }}" alt="Product Image" onerror="this.style.display='none'">
                     {% endif %}
                     {% endfor %}
                     {% if product.product_image_urls.split(',')|length > 1 %}
