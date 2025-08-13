@@ -58,7 +58,6 @@ class Product(db.Model):
     rubber_thickness = db.Column(db.Float, nullable=True)
     rubber_description = db.Column(db.Text, nullable=True)
     variants = db.Column(db.Text)  # Store variants as JSON string
-    show_in_store = db.Column(db.Boolean, default=True)  # New column for store visibility
 
     def to_dict(self):
         return {
@@ -85,8 +84,7 @@ class Product(db.Model):
             "rubber_length": self.rubber_length,
             "rubber_thickness": self.rubber_thickness,
             "rubber_description": self.rubber_description,
-            "variants": json.loads(self.variants) if self.variants else [],
-            "show_in_store": self.show_in_store
+            "variants": json.loads(self.variants) if self.variants else []
         }
 
 # Create DB
@@ -151,7 +149,6 @@ def index():
     query = request.args.get('q', '').lower()
     category = request.args.get('category', '')
     in_stock = request.args.get('in_stock', '')
-    show_in_store = request.args.get('show_in_store', '')
     min_price = request.args.get('min_price', type=float)
     max_price = request.args.get('max_price', type=float)
 
@@ -169,8 +166,6 @@ def index():
         product_query = product_query.filter(Product.category == category)
     if in_stock:
         product_query = product_query.filter(Product.in_stock == (in_stock == 'true'))
-    if show_in_store:
-        product_query = product_query.filter(Product.show_in_store == (show_in_store == 'true'))
     if min_price is not None:
         product_query = product_query.filter(Product.offer_price >= min_price)
     if max_price is not None:
@@ -264,8 +259,7 @@ def add_product_ui():
             rubber_length=float(data.get('rubber_length')) if data.get('rubber_length') else None,
             rubber_thickness=float(data.get('rubber_thickness')) if data.get('rubber_thickness') else None,
             rubber_description=data.get('rubber_description'),
-            variants=json.dumps(variants) if variants else None,
-            show_in_store=data.get('show_in_store') == 'on'
+            variants=json.dumps(variants) if variants else None
         )
         db.session.add(product)
         db.session.commit()
@@ -359,7 +353,6 @@ def edit_product_ui(product_id):
         product.rubber_thickness = float(data.get('rubber_thickness')) if data.get('rubber_thickness') else None
         product.rubber_description = data.get('rubber_description', product.rubber_description)
         product.variants = json.dumps(variants) if variants else product.variants
-        product.show_in_store = data.get('show_in_store') == 'on'
         db.session.commit()
         app.logger.debug(f"Updated product: {product.product_name}, Image URLs: {product.product_image_urls}")
         return redirect(url_for('index'))
@@ -415,8 +408,7 @@ def add_product():
         rubber_length=data.get('rubber_length'),
         rubber_thickness=data.get('rubber_thickness'),
         rubber_description=data.get('rubber_description'),
-        variants=json.dumps(variants) if variants else None,
-        show_in_store=data.get('show_in_store', True)
+        variants=json.dumps(variants) if variants else None
     )
     db.session.add(product)
     db.session.commit()
@@ -427,13 +419,7 @@ def add_product():
 def get_products():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
-    show_in_store_only = request.args.get('show_in_store_only', 'false').lower() == 'true'
-    
-    product_query = Product.query
-    if show_in_store_only:
-        product_query = product_query.filter(Product.show_in_store == True)
-    
-    products_pagination = product_query.paginate(page=page, per_page=per_page, error_out=False)
+    products_pagination = Product.query.paginate(page=page, per_page=per_page, error_out=False)
     return jsonify({
         "products": [p.to_dict() for p in products_pagination.items],
         "total_items": products_pagination.total,
@@ -474,7 +460,6 @@ def update_product(product_id):
     product.rubber_thickness = data.get('rubber_thickness', product.rubber_thickness)
     product.rubber_description = data.get('rubber_description', product.rubber_description)
     product.variants = json.dumps(data.get('variants', json.loads(product.variants) if product.variants else []))
-    product.show_in_store = data.get('show_in_store', product.show_in_store)
     db.session.commit()
     app.logger.debug(f"API: Updated product ID: {product_id}")
     return jsonify({"message": "Product updated"}), 200
@@ -492,20 +477,13 @@ def search_products():
     query = request.args.get('q', '').lower()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
-    show_in_store_only = request.args.get('show_in_store_only', 'false').lower() == 'true'
-    
-    search_query = Product.query.filter(
+    search_results_pagination = Product.query.filter(
         Product.product_name.ilike(f'%{query}%') |
         Product.category.ilike(f'%{query}%') |
         Product.short_description.ilike(f'%{query}%') |
         Product.long_description.ilike(f'%{query}%') |
         Product.rubber_description.ilike(f'%{query}%')
-    )
-    
-    if show_in_store_only:
-        search_query = search_query.filter(Product.show_in_store == True)
-    
-    search_results_pagination = search_query.paginate(page=page, per_page=per_page, error_out=False)
+    ).paginate(page=page, per_page=per_page, error_out=False)
     return jsonify({
         "products": [p.to_dict() for p in search_results_pagination.items],
         "total_items": search_results_pagination.total,
@@ -545,7 +523,6 @@ def update_product_by_sku(sku):
     product.rubber_thickness = data.get('rubber_thickness', product.rubber_thickness)
     product.rubber_description = data.get('rubber_description', product.rubber_description)
     product.variants = json.dumps(data.get('variants', json.loads(product.variants) if product.variants else []))
-    product.show_in_store = data.get('show_in_store', product.show_in_store)
     db.session.commit()
     app.logger.debug(f"API: Updated product with SKU: {sku}")
     return jsonify({"message": "Product updated", "sku": sku}), 200
@@ -581,7 +558,6 @@ def update_product_by_name(name):
     product.rubber_thickness = data.get('rubber_thickness', product.rubber_thickness)
     product.rubber_description = data.get('rubber_description', product.rubber_description)
     product.variants = json.dumps(data.get('variants', json.loads(product.variants) if product.variants else []))
-    product.show_in_store = data.get('show_in_store', product.show_in_store)
     db.session.commit()
     app.logger.debug(f"API: Updated product with name: {name}")
     return jsonify({"message": "Product updated", "product_name": name}), 200
@@ -637,7 +613,6 @@ def bulk_update_products():
             product.rubber_thickness = update.get('rubber_thickness', product.rubber_thickness)
             product.rubber_description = update.get('rubber_description', product.rubber_description)
             product.variants = json.dumps(update.get('variants', json.loads(product.variants) if product.variants else []))
-            product.show_in_store = update.get('show_in_store', product.show_in_store)
             updated_products.append({"identifier": identifier, "status": "updated"})
         except Exception as e:
             errors.append({"error": f"Failed to update product {identifier}: {str(e)}"})
