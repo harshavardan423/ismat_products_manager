@@ -26,6 +26,35 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
 
+# Helper function to normalize image URLs
+def normalize_image_url(url):
+    """Normalize image URL to ensure consistent format"""
+    if not url:
+        return ""
+    
+    url = url.strip()
+    
+    # If it's already a full URL (starts with http), return as is
+    if url.startswith('http://') or url.startswith('https://'):
+        return url
+    
+    # If it already starts with /static/uploads/, return as is
+    if url.startswith('/static/uploads/'):
+        return url
+    
+    # If it starts with static/uploads/, add leading slash
+    if url.startswith('static/uploads/'):
+        return '/' + url
+    
+    # If it's just a filename, construct the full path
+    filename = url.split('/')[-1]
+    return f"/static/uploads/{filename}"
+
+# Add template filter for normalizing URLs
+@app.template_filter('normalize_url')
+def normalize_url_filter(url):
+    return normalize_image_url(url)
+
 # User Model
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -59,6 +88,28 @@ class Product(db.Model):
     rubber_description = db.Column(db.Text, nullable=True)
     variants = db.Column(db.Text)  # Store variants as JSON string
 
+    def normalize_urls(self):
+        """Normalize all URLs in the product"""
+        if self.product_image_urls:
+            urls = [normalize_image_url(url.strip()) for url in self.product_image_urls.split(",") if url.strip()]
+            self.product_image_urls = ",".join(urls)
+        
+        if self.download_pdfs:
+            urls = [normalize_image_url(url.strip()) for url in self.download_pdfs.split(",") if url.strip()]
+            self.download_pdfs = ",".join(urls)
+
+    def get_normalized_image_urls(self):
+        """Get normalized image URLs as a list"""
+        if not self.product_image_urls:
+            return []
+        return [normalize_image_url(url.strip()) for url in self.product_image_urls.split(",") if url.strip()]
+
+    def get_normalized_pdf_urls(self):
+        """Get normalized PDF URLs as a list"""
+        if not self.download_pdfs:
+            return []
+        return [normalize_image_url(url.strip()) for url in self.download_pdfs.split(",") if url.strip()]
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -71,8 +122,8 @@ class Product(db.Model):
             "sku": self.sku,
             "in_stock": self.in_stock,
             "stock_number": self.stock_number,
-            "download_pdfs": self.download_pdfs.split(",") if self.download_pdfs else [],
-            "product_image_urls": self.product_image_urls.split(",") if self.product_image_urls else [],
+            "download_pdfs": self.get_normalized_pdf_urls(),
+            "product_image_urls": self.get_normalized_image_urls(),
             "youtube_links": self.youtube_links.split(",") if self.youtube_links else [],
             "technical_information": self.technical_information,
             "manufacturer": self.manufacturer,
@@ -94,6 +145,23 @@ with app.app_context():
 # Helper function to check allowed file extensions
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+# Helper function to save files and return normalized URLs
+def save_files(files, file_type="image"):
+    """Save files and return list of normalized URLs"""
+    urls = []
+    for file in files:
+        if file and file.filename and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            try:
+                file.save(file_path)
+                normalized_url = f"/static/uploads/{filename}"
+                urls.append(normalized_url)
+                app.logger.debug(f"Saved {file_type}: {file_path} -> {normalized_url}")
+            except Exception as e:
+                app.logger.error(f"Error saving {file_type} {filename}: {str(e)}")
+    return urls
 
 # Login required decorator
 def login_required(f):
@@ -172,6 +240,11 @@ def index():
         product_query = product_query.filter(Product.offer_price <= max_price)
 
     products_pagination = product_query.paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Normalize URLs for all products before rendering
+    for product in products_pagination.items:
+        product.normalize_urls()
+    
     categories = [p.category for p in Product.query.distinct(Product.category)]
     return render_template('index.html', products=products_pagination.items, pagination=products_pagination, categories=categories)
 
@@ -188,18 +261,9 @@ def add_product_ui():
         app.logger.debug(f"Received images: {[f.filename for f in images]}")
         app.logger.debug(f"Received image order: {image_order}")
 
-        image_urls = []
-        for image in images:
-            if image and allowed_file(image.filename):
-                filename = secure_filename(image.filename)
-                image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                try:
-                    image.save(image_path)
-                    image_urls.append(f"{app.config['UPLOAD_FOLDER']}/{filename}")
-                    app.logger.debug(f"Saved image: {image_path}")
-                except Exception as e:
-                    app.logger.error(f"Error saving image {filename}: {str(e)}")
-
+        # Save images with normalized URLs
+        image_urls = save_files(images, "image")
+        
         # Reorder images based on image_order
         ordered_urls = []
         for filename in image_order:
@@ -211,17 +275,8 @@ def add_product_ui():
         image_urls = ordered_urls + image_urls
         app.logger.debug(f"Final image URLs: {image_urls}")
 
-        pdf_urls = []
-        for pdf in pdfs:
-            if pdf and allowed_file(pdf.filename):
-                filename = secure_filename(pdf.filename)
-                pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                try:
-                    pdf.save(pdf_path)
-                    pdf_urls.append(f"{app.config['UPLOAD_FOLDER']}/{filename}")
-                    app.logger.debug(f"Saved PDF: {pdf_path}")
-                except Exception as e:
-                    app.logger.error(f"Error saving PDF {filename}: {str(e)}")
+        # Save PDFs with normalized URLs
+        pdf_urls = save_files(pdfs, "PDF")
 
         # Handle multiple variants
         variants = []
@@ -282,17 +337,10 @@ def edit_product_ui(product_id):
         app.logger.debug(f"Received images: {[f.filename for f in images]}")
         app.logger.debug(f"Received image order: {image_order}")
 
-        image_urls = product.product_image_urls.split(",") if product.product_image_urls else []
-        for image in images:
-            if image and allowed_file(image.filename):
-                filename = secure_filename(image.filename)
-                image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                try:
-                    image.save(image_path)
-                    image_urls.append(f"{app.config['UPLOAD_FOLDER']}/{filename}")
-                    app.logger.debug(f"Saved image: {image_path}")
-                except Exception as e:
-                    app.logger.error(f"Error saving image {filename}: {str(e)}")
+        # Get existing URLs and add new ones
+        image_urls = product.get_normalized_image_urls()
+        new_image_urls = save_files(images, "image")
+        image_urls.extend(new_image_urls)
 
         # Reorder images based on image_order
         ordered_urls = []
@@ -305,17 +353,10 @@ def edit_product_ui(product_id):
         image_urls = ordered_urls + image_urls
         app.logger.debug(f"Final image URLs: {image_urls}")
 
-        pdf_urls = product.download_pdfs.split(",") if product.download_pdfs else []
-        for pdf in pdfs:
-            if pdf and allowed_file(pdf.filename):
-                filename = secure_filename(pdf.filename)
-                pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                try:
-                    pdf.save(pdf_path)
-                    pdf_urls.append(f"{app.config['UPLOAD_FOLDER']}/{filename}")
-                    app.logger.debug(f"Saved PDF: {pdf_path}")
-                except Exception as e:
-                    app.logger.error(f"Error saving PDF {filename}: {str(e)}")
+        # Get existing PDFs and add new ones
+        pdf_urls = product.get_normalized_pdf_urls()
+        new_pdf_urls = save_files(pdfs, "PDF")
+        pdf_urls.extend(new_pdf_urls)
 
         # Handle multiple variants
         variants = []
@@ -330,6 +371,7 @@ def edit_product_ui(product_id):
                     app.logger.error(f"Invalid variant price: {price}")
         app.logger.debug(f"Variants: {variants}")
 
+        # Update product with normalized URLs
         product.category = data.get('category', product.category)
         product.product_name = data.get('product_name', product.product_name)
         product.short_description = data.get('short_description', product.short_description)
@@ -357,6 +399,8 @@ def edit_product_ui(product_id):
         app.logger.debug(f"Updated product: {product.product_name}, Image URLs: {product.product_image_urls}")
         return redirect(url_for('index'))
     
+    # Normalize URLs before rendering the edit form
+    product.normalize_urls()
     return render_template('edit_product.html', product=product)
 
 @app.route('/delete/<int:product_id>', methods=['POST'])
@@ -380,11 +424,22 @@ def delete_selected():
     app.logger.debug(f"Deleted products: {product_ids}")
     return redirect(url_for('index'))
 
-# Existing API Routes
+# Existing API Routes with URL normalization
 @app.route('/add-product', methods=['POST'])
 def add_product():
     data = request.get_json()
     variants = data.get('variants', [])
+    
+    # Normalize image URLs from API
+    image_urls = []
+    if data.get('product_image_urls'):
+        image_urls = [normalize_image_url(url) for url in data.get('product_image_urls', [])]
+    
+    # Normalize PDF URLs from API
+    pdf_urls = []
+    if data.get('download_pdfs'):
+        pdf_urls = [normalize_image_url(url) for url in data.get('download_pdfs', [])]
+    
     product = Product(
         category=data.get('category'),
         product_name=data.get('product_name'),
@@ -395,8 +450,8 @@ def add_product():
         sku=data.get('sku'),
         in_stock=data.get('in_stock', True),
         stock_number=data.get('stock_number', 0),
-        download_pdfs=",".join(data.get('download_pdfs', [])),
-        product_image_urls=",".join(data.get('product_image_urls', [])),
+        download_pdfs=",".join(pdf_urls),
+        product_image_urls=",".join(image_urls),
         youtube_links=data.get('youtube_links'),
         technical_information=data.get('technical_information'),
         manufacturer=data.get('manufacturer'),
@@ -420,6 +475,11 @@ def get_products():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
     products_pagination = Product.query.paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Normalize URLs for all products
+    for product in products_pagination.items:
+        product.normalize_urls()
+    
     return jsonify({
         "products": [p.to_dict() for p in products_pagination.items],
         "total_items": products_pagination.total,
@@ -431,12 +491,23 @@ def get_products():
 @app.route('/product/<int:product_id>', methods=['GET'])
 def get_product(product_id):
     product = Product.query.get_or_404(product_id)
+    product.normalize_urls()
     return jsonify(product.to_dict()), 200
 
 @app.route('/product/<int:product_id>', methods=['PUT'])
 def update_product(product_id):
     data = request.get_json()
     product = Product.query.get_or_404(product_id)
+    
+    # Normalize URLs if provided
+    image_urls = product.get_normalized_image_urls()
+    if 'product_image_urls' in data:
+        image_urls = [normalize_image_url(url) for url in data.get('product_image_urls', [])]
+    
+    pdf_urls = product.get_normalized_pdf_urls()
+    if 'download_pdfs' in data:
+        pdf_urls = [normalize_image_url(url) for url in data.get('download_pdfs', [])]
+    
     product.category = data.get('category', product.category)
     product.product_name = data.get('product_name', product.product_name)
     product.short_description = data.get('short_description', product.short_description)
@@ -446,8 +517,8 @@ def update_product(product_id):
     product.sku = data.get('sku', product.sku)
     product.in_stock = data.get('in_stock', product.in_stock)
     product.stock_number = data.get('stock_number', product.stock_number)
-    product.download_pdfs = ",".join(data.get('download_pdfs', product.download_pdfs.split(",") if product.download_pdfs else []))
-    product.product_image_urls = ",".join(data.get('product_image_urls', product.product_image_urls.split(",") if product.product_image_urls else []))
+    product.download_pdfs = ",".join(pdf_urls)
+    product.product_image_urls = ",".join(image_urls)
     product.youtube_links = data.get('youtube_links', product.youtube_links)
     product.technical_information = data.get('technical_information', product.technical_information)
     product.manufacturer = data.get('manufacturer', product.manufacturer)
@@ -484,6 +555,11 @@ def search_products():
         Product.long_description.ilike(f'%{query}%') |
         Product.rubber_description.ilike(f'%{query}%')
     ).paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Normalize URLs for all products
+    for product in search_results_pagination.items:
+        product.normalize_urls()
+    
     return jsonify({
         "products": [p.to_dict() for p in search_results_pagination.items],
         "total_items": search_results_pagination.total,
@@ -500,6 +576,15 @@ def update_product_by_sku(sku):
     if not product:
         return jsonify({"error": "Product with given SKU not found"}), 404
     
+    # Normalize URLs if provided
+    image_urls = product.get_normalized_image_urls()
+    if 'product_image_urls' in data:
+        image_urls = [normalize_image_url(url) for url in data.get('product_image_urls', [])]
+    
+    pdf_urls = product.get_normalized_pdf_urls()
+    if 'download_pdfs' in data:
+        pdf_urls = [normalize_image_url(url) for url in data.get('download_pdfs', [])]
+    
     product.category = data.get('category', product.category)
     product.product_name = data.get('product_name', product.product_name)
     product.short_description = data.get('short_description', product.short_description)
@@ -509,8 +594,8 @@ def update_product_by_sku(sku):
     product.sku = data.get('sku', product.sku)
     product.in_stock = data.get('in_stock', product.in_stock)
     product.stock_number = data.get('stock_number', product.stock_number)
-    product.download_pdfs = ",".join(data.get('download_pdfs', product.download_pdfs.split(",") if product.download_pdfs else []))
-    product.product_image_urls = ",".join(data.get('product_image_urls', product.product_image_urls.split(",") if product.product_image_urls else []))
+    product.download_pdfs = ",".join(pdf_urls)
+    product.product_image_urls = ",".join(image_urls)
     product.youtube_links = data.get('youtube_links', product.youtube_links)
     product.technical_information = data.get('technical_information', product.technical_information)
     product.manufacturer = data.get('manufacturer', product.manufacturer)
@@ -535,6 +620,15 @@ def update_product_by_name(name):
     if not product:
         return jsonify({"error": "Product with given name not found"}), 404
     
+    # Normalize URLs if provided
+    image_urls = product.get_normalized_image_urls()
+    if 'product_image_urls' in data:
+        image_urls = [normalize_image_url(url) for url in data.get('product_image_urls', [])]
+    
+    pdf_urls = product.get_normalized_pdf_urls()
+    if 'download_pdfs' in data:
+        pdf_urls = [normalize_image_url(url) for url in data.get('download_pdfs', [])]
+    
     product.category = data.get('category', product.category)
     product.product_name = data.get('product_name', product.product_name)
     product.short_description = data.get('short_description', product.short_description)
@@ -544,8 +638,8 @@ def update_product_by_name(name):
     product.sku = data.get('sku', product.sku)
     product.in_stock = data.get('in_stock', product.in_stock)
     product.stock_number = data.get('stock_number', product.stock_number)
-    product.download_pdfs = ",".join(data.get('download_pdfs', product.download_pdfs.split(",") if product.download_pdfs else []))
-    product.product_image_urls = ",".join(data.get('product_image_urls', product.product_image_urls.split(",") if product.product_image_urls else []))
+    product.download_pdfs = ",".join(pdf_urls)
+    product.product_image_urls = ",".join(image_urls)
     product.youtube_links = data.get('youtube_links', product.youtube_links)
     product.technical_information = data.get('technical_information', product.technical_information)
     product.manufacturer = data.get('manufacturer', product.manufacturer)
@@ -590,6 +684,15 @@ def bulk_update_products():
             continue
 
         try:
+            # Normalize URLs if provided
+            image_urls = product.get_normalized_image_urls()
+            if 'product_image_urls' in update:
+                image_urls = [normalize_image_url(url) for url in update.get('product_image_urls', [])]
+            
+            pdf_urls = product.get_normalized_pdf_urls()
+            if 'download_pdfs' in update:
+                pdf_urls = [normalize_image_url(url) for url in update.get('download_pdfs', [])]
+            
             product.category = update.get('category', product.category)
             product.product_name = update.get('product_name', product.product_name)
             product.short_description = update.get('short_description', product.short_description)
@@ -599,8 +702,8 @@ def bulk_update_products():
             product.sku = update.get('sku', product.sku)
             product.in_stock = update.get('in_stock', product.in_stock)
             product.stock_number = update.get('stock_number', product.stock_number)
-            product.download_pdfs = ",".join(update.get('download_pdfs', product.download_pdfs.split(",") if product.download_pdfs else []))
-            product.product_image_urls = ",".join(update.get('product_image_urls', product.product_image_urls.split(",") if product.product_image_urls else []))
+            product.download_pdfs = ",".join(pdf_urls)
+            product.product_image_urls = ",".join(image_urls)
             product.youtube_links = update.get('youtube_links', product.youtube_links)
             product.technical_information = update.get('technical_information', product.technical_information)
             product.manufacturer = update.get('manufacturer', product.manufacturer)
