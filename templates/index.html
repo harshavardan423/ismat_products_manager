@@ -76,22 +76,53 @@
         }
     </style>
     <script>
+        function normalizeImageUrl(imageUrl) {
+            // Remove any leading/trailing whitespace
+            imageUrl = imageUrl.trim();
+            
+            // If it's already a full URL (starts with http), return as is
+            if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+                return imageUrl;
+            }
+            
+            // If it already starts with /static/uploads/, return as is
+            if (imageUrl.startsWith('/static/uploads/')) {
+                return imageUrl;
+            }
+            
+            // If it starts with static/uploads/, add leading slash
+            if (imageUrl.startsWith('static/uploads/')) {
+                return '/' + imageUrl;
+            }
+            
+            // If it's just a filename, construct the full path
+            const filename = imageUrl.split('/').pop();
+            return `/static/uploads/${filename}`;
+        }
+
         function initCarousels() {
             document.querySelectorAll('.carousel').forEach(carousel => {
                 const images = carousel.querySelectorAll('img');
                 let currentIndex = 0;
+                
+                // Show first image if any exist
                 if (images.length > 0) {
                     images[0].classList.add('active');
-                    carousel.querySelector('.prev')?.addEventListener('click', () => {
-                        images[currentIndex].classList.remove('active');
-                        currentIndex = (currentIndex - 1 + images.length) % images.length;
-                        images[currentIndex].classList.add('active');
-                    });
-                    carousel.querySelector('.next')?.addEventListener('click', () => {
-                        images[currentIndex].classList.remove('active');
-                        currentIndex = (currentIndex + 1) % images.length;
-                        images[currentIndex].classList.add('active');
-                    });
+                    
+                    // Add navigation event listeners only if there are multiple images
+                    if (images.length > 1) {
+                        carousel.querySelector('.prev')?.addEventListener('click', () => {
+                            images[currentIndex].classList.remove('active');
+                            currentIndex = (currentIndex - 1 + images.length) % images.length;
+                            images[currentIndex].classList.add('active');
+                        });
+                        
+                        carousel.querySelector('.next')?.addEventListener('click', () => {
+                            images[currentIndex].classList.remove('active');
+                            currentIndex = (currentIndex + 1) % images.length;
+                            images[currentIndex].classList.add('active');
+                        });
+                    }
                 }
             });
         }
@@ -244,12 +275,9 @@
                 <div class="carousel">
                     {% for image_url in product.product_image_urls.split(',') %}
                     {% set image_url = image_url.strip() %}
-                    {% if image_url.startswith('/static/uploads/') or image_url.startswith('static/uploads/') %}
-                        <!-- Image URL is already a full path, use it directly -->
-                        <img src="{{ image_url }}" alt="Product Image" onerror="this.style.display='none'">
-                    {% else %}
-                        <!-- Image URL is just a filename, construct the full path -->
-                        <img src="{{ url_for('serve_uploaded_file', filename=image_url.split('/')[-1]) }}" alt="Product Image" onerror="this.style.display='none'">
+                    {% if image_url %}
+                    <img src="{{image_url}}" alt="Product Image" 
+                         onerror="this.src = normalizeImageUrl('{{ image_url }}'); this.onerror = function() { this.style.display='none'; }">
                     {% endif %}
                     {% endfor %}
                     {% if product.product_image_urls.split(',')|length > 1 %}
@@ -326,10 +354,12 @@
                         <p><strong>PDFs:</strong></p>
                         {% for pdf in product.download_pdfs.split(',') %}
                         {% set pdf = pdf.strip() %}
+                        {% if pdf %}
                         {% if pdf.startswith('/static/uploads/') or pdf.startswith('static/uploads/') %}
-                            <a href="{{ pdf }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
+                            <a href="{{ pdf if pdf.startswith('/') else '/' + pdf }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
                         {% else %}
-                            <a href="{{ url_for('serve_uploaded_file', filename=pdf.split('/')[-1]) }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
+                            <a href="/static/uploads/{{ pdf.split('/')[-1] }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
+                        {% endif %}
                         {% endif %}
                         {% endfor %}
                     </div>
