@@ -57,11 +57,6 @@ class Product(db.Model):
     rubber_length = db.Column(db.Float, nullable=True)
     rubber_thickness = db.Column(db.Float, nullable=True)
     rubber_description = db.Column(db.Text, nullable=True)
-    dead_weight = db.Column(db.Float, nullable=True)  # New field for dead weight
-    length = db.Column(db.Float, nullable=True)  # New field for length
-    breadth = db.Column(db.Float, nullable=True)  # New field for breadth
-    height = db.Column(db.Float, nullable=True)  # New field for height
-    dimension_unit = db.Column(db.String(20), nullable=True)  # New field for dimension unit (e.g., cm, m, inch)
     variants = db.Column(db.Text)  # Store variants as JSON string
 
     def to_dict(self):
@@ -89,11 +84,6 @@ class Product(db.Model):
             "rubber_length": self.rubber_length,
             "rubber_thickness": self.rubber_thickness,
             "rubber_description": self.rubber_description,
-            "dead_weight": self.dead_weight,
-            "length": self.length,
-            "breadth": self.breadth,
-            "height": self.height,
-            "dimension_unit": self.dimension_unit,
             "variants": json.loads(self.variants) if self.variants else []
         }
 
@@ -269,11 +259,6 @@ def add_product_ui():
             rubber_length=float(data.get('rubber_length')) if data.get('rubber_length') else None,
             rubber_thickness=float(data.get('rubber_thickness')) if data.get('rubber_thickness') else None,
             rubber_description=data.get('rubber_description'),
-            dead_weight=float(data.get('dead_weight')) if data.get('dead_weight') else None,
-            length=float(data.get('length')) if data.get('length') else None,
-            breadth=float(data.get('breadth')) if data.get('breadth') else None,
-            height=float(data.get('height')) if data.get('height') else None,
-            dimension_unit=data.get('dimension_unit'),
             variants=json.dumps(variants) if variants else None
         )
         db.session.add(product)
@@ -367,11 +352,6 @@ def edit_product_ui(product_id):
         product.rubber_length = float(data.get('rubber_length')) if data.get('rubber_length') else None
         product.rubber_thickness = float(data.get('rubber_thickness')) if data.get('rubber_thickness') else None
         product.rubber_description = data.get('rubber_description', product.rubber_description)
-        product.dead_weight = float(data.get('dead_weight')) if data.get('dead_weight') else None
-        product.length = float(data.get('length')) if data.get('length') else None
-        product.breadth = float(data.get('breadth')) if data.get('breadth') else None
-        product.height = float(data.get('height')) if data.get('height') else None
-        product.dimension_unit = data.get('dimension_unit', product.dimension_unit)
         product.variants = json.dumps(variants) if variants else product.variants
         db.session.commit()
         app.logger.debug(f"Updated product: {product.product_name}, Image URLs: {product.product_image_urls}")
@@ -428,11 +408,6 @@ def add_product():
         rubber_length=data.get('rubber_length'),
         rubber_thickness=data.get('rubber_thickness'),
         rubber_description=data.get('rubber_description'),
-        dead_weight=data.get('dead_weight'),
-        length=data.get('length'),
-        breadth=data.get('breadth'),
-        height=data.get('height'),
-        dimension_unit=data.get('dimension_unit'),
         variants=json.dumps(variants) if variants else None
     )
     db.session.add(product)
@@ -484,11 +459,6 @@ def update_product(product_id):
     product.rubber_length = data.get('rubber_length', product.rubber_length)
     product.rubber_thickness = data.get('rubber_thickness', product.rubber_thickness)
     product.rubber_description = data.get('rubber_description', product.rubber_description)
-    product.dead_weight = data.get('dead_weight', product.dead_weight)
-    product.length = data.get('length', product.length)
-    product.breadth = data.get('breadth', product.breadth)
-    product.height = data.get('height', product.height)
-    product.dimension_unit = data.get('dimension_unit', product.dimension_unit)
     product.variants = json.dumps(data.get('variants', json.loads(product.variants) if product.variants else []))
     db.session.commit()
     app.logger.debug(f"API: Updated product ID: {product_id}")
@@ -552,11 +522,6 @@ def update_product_by_sku(sku):
     product.rubber_length = data.get('rubber_length', product.rubber_length)
     product.rubber_thickness = data.get('rubber_thickness', product.rubber_thickness)
     product.rubber_description = data.get('rubber_description', product.rubber_description)
-    product.dead_weight = data.get('dead_weight', product.dead_weight)
-    product.length = data.get('length', product.length)
-    product.breadth = data.get('breadth', product.breadth)
-    product.height = data.get('height', product.height)
-    product.dimension_unit = data.get('dimension_unit', product.dimension_unit)
     product.variants = json.dumps(data.get('variants', json.loads(product.variants) if product.variants else []))
     db.session.commit()
     app.logger.debug(f"API: Updated product with SKU: {sku}")
@@ -592,11 +557,6 @@ def update_product_by_name(name):
     product.rubber_length = data.get('rubber_length', product.rubber_length)
     product.rubber_thickness = data.get('rubber_thickness', product.rubber_thickness)
     product.rubber_description = data.get('rubber_description', product.rubber_description)
-    product.dead_weight = data.get('dead_weight', product.dead_weight)
-    product.length = data.get('length', product.length)
-    product.breadth = data.get('breadth', product.breadth)
-    product.height = data.get('height', product.height)
-    product.dimension_unit = data.get('dimension_unit', product.dimension_unit)
     product.variants = json.dumps(data.get('variants', json.loads(product.variants) if product.variants else []))
     db.session.commit()
     app.logger.debug(f"API: Updated product with name: {name}")
@@ -652,11 +612,6 @@ def bulk_update_products():
             product.rubber_length = update.get('rubber_length', product.rubber_length)
             product.rubber_thickness = update.get('rubber_thickness', product.rubber_thickness)
             product.rubber_description = update.get('rubber_description', product.rubber_description)
-            product.dead_weight = update.get('dead_weight', product.dead_weight)
-            product.length = update.get('length', product.length)
-            product.breadth = update.get('breadth', product.breadth)
-            product.height = update.get('height', product.height)
-            product.dimension_unit = update.get('dimension_unit', product.dimension_unit)
             product.variants = json.dumps(update.get('variants', json.loads(product.variants) if product.variants else []))
             updated_products.append({"identifier": identifier, "status": "updated"})
         except Exception as e:
