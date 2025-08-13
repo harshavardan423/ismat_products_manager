@@ -76,53 +76,22 @@
         }
     </style>
     <script>
-        function normalizeImageUrl(imageUrl) {
-            // Remove any leading/trailing whitespace
-            imageUrl = imageUrl.trim();
-            
-            // If it's already a full URL (starts with http), return as is
-            if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-                return imageUrl;
-            }
-            
-            // If it already starts with /static/uploads/, return as is
-            if (imageUrl.startsWith('/static/uploads/')) {
-                return imageUrl;
-            }
-            
-            // If it starts with static/uploads/, add leading slash
-            if (imageUrl.startsWith('static/uploads/')) {
-                return '/' + imageUrl;
-            }
-            
-            // If it's just a filename, construct the full path
-            const filename = imageUrl.split('/').pop();
-            return `/static/uploads/${filename}`;
-        }
-
         function initCarousels() {
             document.querySelectorAll('.carousel').forEach(carousel => {
                 const images = carousel.querySelectorAll('img');
                 let currentIndex = 0;
-                
-                // Show first image if any exist
                 if (images.length > 0) {
                     images[0].classList.add('active');
-                    
-                    // Add navigation event listeners only if there are multiple images
-                    if (images.length > 1) {
-                        carousel.querySelector('.prev')?.addEventListener('click', () => {
-                            images[currentIndex].classList.remove('active');
-                            currentIndex = (currentIndex - 1 + images.length) % images.length;
-                            images[currentIndex].classList.add('active');
-                        });
-                        
-                        carousel.querySelector('.next')?.addEventListener('click', () => {
-                            images[currentIndex].classList.remove('active');
-                            currentIndex = (currentIndex + 1) % images.length;
-                            images[currentIndex].classList.add('active');
-                        });
-                    }
+                    carousel.querySelector('.prev')?.addEventListener('click', () => {
+                        images[currentIndex].classList.remove('active');
+                        currentIndex = (currentIndex - 1 + images.length) % images.length;
+                        images[currentIndex].classList.add('active');
+                    });
+                    carousel.querySelector('.next')?.addEventListener('click', () => {
+                        images[currentIndex].classList.remove('active');
+                        currentIndex = (currentIndex + 1) % images.length;
+                        images[currentIndex].classList.add('active');
+                    });
                 }
             });
         }
@@ -164,6 +133,24 @@
                 document.body.appendChild(form);
                 form.submit();
             }
+        }
+
+        // Helper function to determine if URL is external
+        function isExternalUrl(url) {
+            return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//');
+        }
+
+        // Helper function to get proper image src
+        function getImageSrc(imageUrl) {
+            if (isExternalUrl(imageUrl)) {
+                return imageUrl;
+            }
+            // For local files, ensure proper path construction
+            if (imageUrl.startsWith('/static/uploads/') || imageUrl.startsWith('static/uploads/')) {
+                return imageUrl;
+            }
+            // If it's just a filename, construct the full path
+            return `/static/uploads/${imageUrl.split('/').pop()}`;
         }
 
         window.onload = initCarousels;
@@ -275,10 +262,34 @@
                 <div class="carousel">
                     {% for image_url in product.product_image_urls.split(',') %}
                     {% set image_url = image_url.strip() %}
-                    {% if image_url %}
-                    <img src="{{image_url}}" alt="Product Image" 
-                         onerror="this.src = normalizeImageUrl('{{ image_url }}'); this.onerror = function() { this.style.display='none'; }">
-                    {% endif %}
+                    <script>
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const img = document.createElement('img');
+                            const imageUrl = '{{ image_url|safe }}';
+                            
+                            // Determine proper src based on URL type
+                            if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://') || imageUrl.startsWith('//')) {
+                                // External URL - use as is
+                                img.src = imageUrl;
+                            } else if (imageUrl.startsWith('/static/uploads/') || imageUrl.startsWith('static/uploads/')) {
+                                // Local upload - use as is or ensure leading slash
+                                img.src = imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl;
+                            } else {
+                                // Filename only - construct full path
+                                img.src = '{{ url_for("serve_uploaded_file", filename="") }}' + imageUrl.split('/').pop();
+                            }
+                            
+                            img.alt = 'Product Image';
+                            img.onerror = function() { this.style.display = 'none'; };
+                            
+                            // Find the carousel container for this product
+                            const carousels = document.querySelectorAll('.carousel');
+                            const currentCarousel = carousels[{{ loop.index0 }}];
+                            if (currentCarousel) {
+                                currentCarousel.appendChild(img);
+                            }
+                        });
+                    </script>
                     {% endfor %}
                     {% if product.product_image_urls.split(',')|length > 1 %}
                     <span class="carousel-button prev">‹</span>
@@ -354,12 +365,12 @@
                         <p><strong>PDFs:</strong></p>
                         {% for pdf in product.download_pdfs.split(',') %}
                         {% set pdf = pdf.strip() %}
-                        {% if pdf %}
-                        {% if pdf.startswith('/static/uploads/') or pdf.startswith('static/uploads/') %}
+                        {% if pdf.startswith('http://') or pdf.startswith('https://') or pdf.startswith('//') %}
+                            <a href="{{ pdf }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
+                        {% elif pdf.startswith('/static/uploads/') or pdf.startswith('static/uploads/') %}
                             <a href="{{ pdf if pdf.startswith('/') else '/' + pdf }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
                         {% else %}
-                            <a href="/static/uploads/{{ pdf.split('/')[-1] }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
-                        {% endif %}
+                            <a href="{{ url_for('serve_uploaded_file', filename=pdf.split('/')[-1]) }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
                         {% endif %}
                         {% endfor %}
                     </div>
