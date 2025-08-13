@@ -60,30 +60,6 @@
         }
     </style>
     <script>
-        function normalizeImageUrl(imageUrl) {
-            // Remove any leading/trailing whitespace
-            imageUrl = imageUrl.trim();
-            
-            // If it's already a full URL (starts with http), return as is
-            if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-                return imageUrl;
-            }
-            
-            // If it already starts with /static/uploads/, return as is
-            if (imageUrl.startsWith('/static/uploads/')) {
-                return imageUrl;
-            }
-            
-            // If it starts with static/uploads/, add leading slash
-            if (imageUrl.startsWith('static/uploads/')) {
-                return '/' + imageUrl;
-            }
-            
-            // If it's just a filename, construct the full path
-            const filename = imageUrl.split('/').pop();
-            return `/static/uploads/${filename}`;
-        }
-
         function handleDragOver(e) {
             e.preventDefault();
             e.target.classList.add('dragover');
@@ -185,6 +161,24 @@
             console.log('Added variant:', name, price, sku);
         }
 
+        // Helper function to determine if URL is external
+        function isExternalUrl(url) {
+            return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//');
+        }
+
+        // Helper function to get proper image src for existing images
+        function getImageSrc(imageUrl) {
+            if (isExternalUrl(imageUrl)) {
+                return imageUrl;
+            }
+            // For local files, ensure proper path construction
+            if (imageUrl.startsWith('/static/uploads/') || imageUrl.startsWith('static/uploads/')) {
+                return imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl;
+            }
+            // If it's just a filename, construct the full path
+            return `/static/uploads/${imageUrl.split('/').pop()}`;
+        }
+
         window.onload = function () {
             const dropzone = document.getElementById('image-dropzone');
             dropzone.addEventListener('dragover', handleDragOver);
@@ -198,35 +192,20 @@
             document.getElementById('image-preview').addEventListener('dragover', handleImageDragOver);
             document.getElementById('image-preview').addEventListener('drop', handleImageDrop);
             
-            // Handle existing images with proper URL normalization
+            // Set up existing images with proper src and filename
             document.querySelectorAll('#image-preview img').forEach(img => {
-                // Extract filename from the current src
-                const currentSrc = img.src;
-                let filename;
-                
-                if (currentSrc.includes('/static/uploads/')) {
-                    filename = currentSrc.split('/static/uploads/').pop();
+                const originalSrc = img.src;
+                // Extract filename for data attribute
+                if (isExternalUrl(originalSrc)) {
+                    // For external URLs, use the full URL as filename for tracking
+                    img.dataset.filename = originalSrc;
                 } else {
-                    filename = currentSrc.split('/').pop();
+                    // For local files, extract just the filename
+                    img.dataset.filename = originalSrc.split('/').pop();
                 }
-                
-                img.dataset.filename = filename;
                 img.draggable = true;
                 img.ondragstart = dragStart;
                 img.ondragend = dragEnd;
-                
-                // Add error handling to normalize URL if image fails to load
-                img.onerror = function() {
-                    const normalizedUrl = normalizeImageUrl(this.dataset.filename);
-                    if (this.src !== normalizedUrl) {
-                        this.src = normalizedUrl;
-                        this.onerror = function() {
-                            this.style.display = 'none';
-                        };
-                    } else {
-                        this.style.display = 'none';
-                    }
-                };
             });
             updateImageOrder();
         };
@@ -324,11 +303,41 @@
                     <div class="image-preview" id="image-preview">
                         {% for image_url in product.product_image_urls.split(',') if product.product_image_urls %}
                         {% set image_url = image_url.strip() %}
-                        {% if image_url %}
-                        <img src="{{ image_url }}" 
-                             data-filename="{{ image_url.split('/')[-1] }}"
-                             onerror="this.src = normalizeImageUrl('{{ image_url }}'); this.onerror = function() { this.style.display='none'; }">
-                        {% endif %}
+                        <script>
+                            document.addEventListener('DOMContentLoaded', function() {
+                                const img = document.createElement('img');
+                                const imageUrl = '{{ image_url|safe }}';
+                                
+                                // Determine proper src based on URL type
+                                if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://') || imageUrl.startsWith('//')) {
+                                    // External URL - use as is
+                                    img.src = imageUrl;
+                                    img.dataset.filename = imageUrl; // Use full URL as filename for external images
+                                } else if (imageUrl.startsWith('/static/uploads/') || imageUrl.startsWith('static/uploads/')) {
+                                    // Local upload - ensure proper path
+                                    img.src = imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl;
+                                    img.dataset.filename = imageUrl.split('/').pop();
+                                } else {
+                                    // Filename only - construct full path
+                                    const filename = imageUrl.split('/').pop();
+                                    img.src = '{{ url_for("serve_uploaded_file", filename="") }}' + filename;
+                                    img.dataset.filename = filename;
+                                }
+                                
+                                img.draggable = true;
+                                img.ondragstart = dragStart;
+                                img.ondragend = dragEnd;
+                                img.onerror = function() { 
+                                    console.warn('Failed to load image:', this.src);
+                                    this.style.display = 'none'; 
+                                };
+                                
+                                const imagePreview = document.getElementById('image-preview');
+                                if (imagePreview) {
+                                    imagePreview.appendChild(img);
+                                }
+                            });
+                        </script>
                         {% endfor %}
                     </div>
                     <div id="image-dropzone" class="mt-2">Drag and drop images here or click to select</div>
@@ -342,14 +351,12 @@
                     <div class="mt-2 flex flex-wrap gap-2">
                         {% for pdf in product.download_pdfs.split(',') %}
                         {% set pdf = pdf.strip() %}
-                        {% if pdf %}
-                        {% if pdf.startswith('/static/uploads/') or pdf.startswith('static/uploads/') %}
-                            <a href="{{ pdf if pdf.startswith('/') else '/' + pdf }}" target="_blank"
-                                class="text-blue-600 hover:underline">Download PDF</a>
+                        {% if pdf.startswith('http://') or pdf.startswith('https://') or pdf.startswith('//') %}
+                            <a href="{{ pdf }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
+                        {% elif pdf.startswith('/static/uploads/') or pdf.startswith('static/uploads/') %}
+                            <a href="{{ pdf if pdf.startswith('/') else '/' + pdf }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
                         {% else %}
-                            <a href="/static/uploads/{{ pdf.split('/')[-1] }}" target="_blank"
-                                class="text-blue-600 hover:underline">Download PDF</a>
-                        {% endif %}
+                            <a href="{{ url_for('serve_uploaded_file', filename=pdf.split('/')[-1]) }}" target="_blank" class="text-blue-600 hover:underline">Download PDF</a>
                         {% endif %}
                         {% endfor %}
                     </div>
